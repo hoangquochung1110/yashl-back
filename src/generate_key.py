@@ -54,6 +54,7 @@ def create_entry(
         }
     )
 
+
 def saturate(key):
     """
     Turn the base [BASE] number [key] into an integer
@@ -63,6 +64,7 @@ def saturate(key):
     for idx, char in enumerate(reversed_key):
         int_sum += true_ord(char) * int(math.pow(BASE, idx))
     return int_sum
+
 
 def true_ord(char):
     """
@@ -78,6 +80,7 @@ def true_ord(char):
         return ord(char) - LOWERCASE_OFFSET
     else:
         raise ValueError("%s is not a valid character" % char)
+
 
 def true_chr(integer):
     """
