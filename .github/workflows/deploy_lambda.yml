@@ -26,11 +26,24 @@ jobs:
         run: |
           pip install -r requirements.txt  # Install dependencies if any
 
-      - name: Create ZIP package
-        run: cd src && zip -r ../${{ matrix.lambda }}.zip ${{ matrix.lambda }}.py
-
-      - name: Deploy to AWS Lambda
+      - name: Check for changes in Lambda function directory
+        id: check_changes
         run: |
+          echo "Checking for changes in /src directory..."
+          if git diff --name-only HEAD^ HEAD | grep '^src/'; then
+            echo "src-changes=true" >> $GITHUB_ENV
+          else
+            echo "src-changes=false" >> $GITHUB_ENV
+          fi
+
+      - name: Deploy Lambda Function with .zip Deployment Package
+        if: env.src-changes == 'true'
+        run: |
+          echo "Deploying updated Lambda functions..."
+          # Package your Lambda function
+          cd src  # Navigate to the src directory again if needed
+          zip -r ../${{ matrix.lambda }}.zip ${{ matrix.lambda }}.py
+          
           aws lambda update-function-code --function-name ${{ matrix.lambda }} --zip-file fileb://${{ matrix.lambda }}.zip
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
