@@ -27,8 +27,7 @@ jobs:
           pip install -r requirements.txt  # Install dependencies if any
 
       - name: Create ZIP package
-        run: |
-          zip -r ${{ matrix.lambda }}.zip src/${{ matrix.lambda }}.py
+        run: cd src && zip -r ../${{ matrix.lambda }}.zip ${{ matrix.lambda }}.py
 
       - name: Deploy to AWS Lambda
         run: |
