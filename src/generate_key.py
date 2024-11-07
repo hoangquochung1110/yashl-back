@@ -14,7 +14,7 @@ DIGIT_OFFSET = 48
 
 
 def lambda_handler(event, context):
-
+    """Generate a shorten path for a destination URL."""
     destination_url = event.get('destination_url', '')
     shorten_path = generate_shorten_path()
     key_id = saturate(shorten_path)
@@ -50,7 +50,7 @@ def create_entry(
             'key_id': key_id,
             'shorten_path': shorten_path,
             'destination_url': destination_url,
-            'click_count': click_count
+            'click_count': click_count,
         }
     )
 
