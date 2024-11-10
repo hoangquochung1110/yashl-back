@@ -19,15 +19,16 @@ def lambda_handler(event, context):
     shorten_path = generate_shorten_path()
     key_id = saturate(shorten_path)
 
-    create_entry(
-        table_name="yashl",
-        key_id=key_id,
-        shorten_path=shorten_path,
-        destination_url=destination_url,
-    )
+    if destination_url:
+        create_entry(
+            table_name="yashl",
+            key_id=key_id,
+            shorten_path=shorten_path,
+            destination_url=destination_url,
+        )
     return {
         'statusCode': 200,
-        'body': json.dumps(shorten_path),
+        'body': json.dumps({'key': shorten_path}),
     }
 
 
