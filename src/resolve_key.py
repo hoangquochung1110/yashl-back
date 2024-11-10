@@ -33,7 +33,7 @@ def resolve_url(table_name, key_id):
     table = dynamodb.Table(table_name)
     response = table.get_item(
         Key={
-            'key_id': key_id,
+            'key_id': key_id
         }
     )
     item = response.get('Item', {})
