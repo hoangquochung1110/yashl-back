@@ -17,9 +17,9 @@ def lambda_handler(event, context):
     """Generate a shorten path for a destination URL."""
     destination_url = event.get('destination_url', '')
     shorten_path = generate_shorten_path()
-    key_id = saturate(shorten_path)
 
     if destination_url:
+        key_id = saturate(shorten_path)
         create_entry(
             table_name="yashl",
             key_id=key_id,
