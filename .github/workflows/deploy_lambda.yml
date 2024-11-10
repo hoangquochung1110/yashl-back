@@ -42,9 +42,8 @@ jobs:
         run: |
           echo "Deploying updated Lambda functions..."
           # Package your Lambda function
-          cd src  # Navigate to the src directory again if needed
-          zip -r ../${{ matrix.lambda }}.zip ${{ matrix.lambda }}.py
-          
+          zip -r ${{ matrix.lambda }}.zip src/${{ matrix.lambda }}.py
+
           aws lambda update-function-code --function-name ${{ matrix.lambda }} --zip-file fileb://${{ matrix.lambda }}.zip
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
