@@ -34,7 +34,7 @@ def lambda_handler(event, context):
         }
     return {
         'statusCode': 400,
-        'body': json.dumps({'error': 'Missing destination_url'}),
+        'body': json.dumps({'error': event}),
     }
 
 
