@@ -28,9 +28,13 @@ def lambda_handler(event, context):
             shorten_path=shorten_path,
             destination_url=destination_url,
         )
+        return {
+            'statusCode': 200,
+            'body': json.dumps({'key': shorten_path}),
+        }
     return {
-        'statusCode': 200,
-        'body': json.dumps({'key': shorten_path}),
+        'statusCode': 400,
+        'body': json.dumps({'error': 'Missing destination_url'}),
     }
 
 
