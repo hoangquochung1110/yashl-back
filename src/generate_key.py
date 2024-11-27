@@ -16,6 +16,7 @@ DIGIT_OFFSET = 48
 def lambda_handler(event, context):
     """Generate a shorten path for a destination URL."""
     destination_url = event.get('destination_url', '')
+    user_id = event.get('user_id', '')
     shorten_path = generate_shorten_path()
 
     if destination_url:
@@ -23,6 +24,7 @@ def lambda_handler(event, context):
         create_entry(
             table_name="yashl",
             key_id=key_id,
+            user_id=user_id,
             shorten_path=shorten_path,
             destination_url=destination_url,
         )
@@ -40,6 +42,7 @@ def generate_shorten_path():
 def create_entry(
     table_name,
     key_id,
+    user_id,
     shorten_path,
     destination_url,
     click_count=0,
@@ -52,6 +55,7 @@ def create_entry(
             'shorten_path': shorten_path,
             'destination_url': destination_url,
             'click_count': click_count,
+            'user_id': user_id,
         }
     )
 
