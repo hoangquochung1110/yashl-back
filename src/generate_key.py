@@ -60,7 +60,7 @@ def create_entry(
     )
 
 
-def saturate(key):
+def saturate(key) -> int:
     """
     Turn the base [BASE] number [key] into an integer
     """
