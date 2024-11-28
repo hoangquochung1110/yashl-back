@@ -14,15 +14,14 @@ def lambda_handler(event, context):
     retrieve the url from the path parameter from the table above
     then redirect users to destination url
     """
-    pathParameters = event['pathParameters']
-    shorten_path = pathParameters['shorten_path']
-
+    path_params = event['pathParameters']
+    shorten_path = path_params['shorten_path']
     key_id = saturate(shorten_path)
 
     destination_url = resolve_url('yashl', key_id)
 
     return {    
-            'statusCode': 301,
+            'statusCode': 302,
             'headers': {
                 'Location': destination_url,
             }

@@ -15,11 +15,11 @@ DIGIT_OFFSET = 48
 
 def lambda_handler(event, context):
     """Generate a shorten path for a destination URL."""
-    destination_url = event.get('destination_url', '')
-    user_id = event.get('user_id', '')
-    shorten_path = generate_shorten_path()
-
+    destination_url = event['destination_url']
     if destination_url:
+        user_id = event.get('user_id', '')
+        shorten_path = generate_shorten_path()
+
         key_id = saturate(shorten_path)
         create_entry(
             table_name="yashl",
@@ -34,7 +34,6 @@ def lambda_handler(event, context):
         }
     return {
         'statusCode': 400,
-        'body': json.dumps({'error': event}),
     }
 
 
