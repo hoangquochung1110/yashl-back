@@ -4,6 +4,7 @@ from boto3.dynamodb.conditions import Key
 
 
 def lambda_handler(event, context):
+    """Lambda to handle list key request."""
     user_id = event['user_id']
     keys = list_keys_by_user_id(user_id)
     return {
