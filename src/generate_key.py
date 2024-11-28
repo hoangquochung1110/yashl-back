@@ -16,17 +16,21 @@ DIGIT_OFFSET = 48
 def lambda_handler(event, context):
     """Generate a shorten path for a destination URL."""
     destination_url = event['destination_url']
-    if destination_url:
-        user_id = event.get('user_id', '')
-        shorten_path = generate_shorten_path()
+    user_id = event.get('user_id',  '')
 
+    if destination_url:
+        shorten_path = generate_shorten_path()
         key_id = saturate(shorten_path)
-        create_entry(
-            table_name="yashl",
+        attrs_to_create = dict(
             key_id=key_id,
-            user_id=user_id,
             shorten_path=shorten_path,
             destination_url=destination_url,
+        )
+        if user_id:
+            attrs_to_create.update({'user_id': user_id})
+        create_entry(
+            table_name="yashl",
+            **attrs_to_create,
         )
         return {
             'statusCode': 200,
@@ -44,21 +48,14 @@ def generate_shorten_path():
 
 def create_entry(
     table_name,
-    key_id,
-    user_id,
-    shorten_path,
-    destination_url,
-    click_count=0,
+    **kwargs,
 ):
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(table_name)
     table.put_item(
         Item={
-            'key_id': key_id,
-            'shorten_path': shorten_path,
-            'destination_url': destination_url,
-            'click_count': click_count,
-            'user_id': user_id,
+            'click_count': 0,
+            **kwargs,
         }
     )
 
