@@ -18,7 +18,10 @@ def lambda_handler(event, context):
     keys = list_keys_by_user_id(user_id)
     return {
         'statusCode': 200,
-        'body': json.dumps(keys, cls=DecimalEncoder)
+        'body': json.dumps(keys, cls=DecimalEncoder),
+        'headers': {
+            'Access-Control-Allow-Origin': '*',
+        }
     }
 
 
