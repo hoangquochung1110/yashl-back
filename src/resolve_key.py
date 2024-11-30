@@ -27,26 +27,28 @@ def lambda_handler(event, context):
             }
         }
 
+
 def resolve_url(table_name, key_id):
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(table_name)
-    response = table.get_item(
+    response = table.update_item(
         Key={
-            'key_id': key_id
-        }
+            'key_id': key_id,
+        },
+        UpdateExpression="SET click_count = click_count + :inc",
+        ExpressionAttributeValues={
+            ':inc': 1
+        },
+        ConditionExpression="attribute_exists(key_id)",
+        ReturnValues='ALL_NEW'
     )
-    item = response.get('Item', {})
+    item = response.get('Attributes')
     if item:
-        table.update_item(
-            Key={
-                'key_id': key_id,
-            },
-            UpdateExpression="SET click_count = click_count + :inc",
-            ExpressionAttributeValues={
-                ':inc': 1
-            }
-        )
-    return item.get('destination_url')
+        return item.get('destination_url')
+    else:
+        # Handle the case where the item doesn't exist
+        # You can raise an exception or return a default value
+        raise ValueError(f"Item with key_id {key_id} not found")
 
 
 def saturate(key):
