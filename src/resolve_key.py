@@ -1,3 +1,4 @@
+import json
 import boto3
 import math
 
@@ -21,10 +22,10 @@ def lambda_handler(event, context):
     destination_url = resolve_url('yashl', key_id)
 
     return {    
-            'statusCode': 302,
-            'headers': {
-                'Location': destination_url,
-            }
+            'statusCode': 200,
+            'body': json.dumps({
+                'destination_url': destination_url,
+            }),
         }
 
 
