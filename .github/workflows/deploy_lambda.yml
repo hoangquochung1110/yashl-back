@@ -11,7 +11,7 @@ jobs:
 
     strategy:
       matrix:
-        lambda: [generate_key, resolve_key, list_key]  # List your Lambda function names here
+        lambda: [generate_key, resolve_key, list_key, captureScreenshot]  # List your Lambda function names here
 
     steps:
       - name: Checkout code
