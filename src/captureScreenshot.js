@@ -1,6 +1,7 @@
-const chromium = require('chrome-aws-lambda');
+import chromium from 'chrome-aws-lambda';
 
 exports.handler = async (event, context, callback) => {
+  //
   let result = null;
   let browser = null;
 
