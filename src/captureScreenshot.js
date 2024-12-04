@@ -1,7 +1,6 @@
 const chromium = require('chrome-aws-lambda');
 
 exports.handler = async (event, context, callback) => {
-  // script to capture screenshots
   let result = null;
   let browser = null;
 
