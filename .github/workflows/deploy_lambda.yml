@@ -11,7 +11,7 @@ jobs:
 
     strategy:
       matrix:
-        lambda: [generate_key, resolve_key, list_key]  # List your Lambda function names here
+        lambda: [generate_key, resolve_key, list_key, capture_screenshot]  # List your Lambda function names here
 
     steps:
       - name: Checkout code
@@ -44,9 +44,7 @@ jobs:
           # Package your Lambda function
           cd src  # Navigate to the Lambda function directory
           zip -r ../${{ matrix.lambda }}.zip ${{ matrix.lambda }}.py
-          zip -r ../captureScreenshot.zip captureScreenshot.js
           aws lambda update-function-code --function-name ${{ matrix.lambda }} --zip-file fileb://../${{ matrix.lambda }}.zip
-          aws lambda update-function-code --function-name captureScreenshot --zip-file fileb://../captureScreenshot.zip
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
