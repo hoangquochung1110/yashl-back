@@ -18,7 +18,7 @@ def lambda_handler(event, context):
     """Generate a shorten path for a destination URL."""
 
     secret_key = os.environ.get('SECRET_KEY')
-    if event['HTTPAuthorization'] != secret_key:
+    if event.get('HTTPAuthorization', '') != secret_key:
         return {
             'statusCode': 401,
         }
