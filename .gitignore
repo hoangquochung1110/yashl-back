@@ -234,3 +234,10 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
+
+.zip
+*layers/
+
+node_modules/
+
+*bruno/
