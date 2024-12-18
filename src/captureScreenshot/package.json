@@ -1,0 +1,21 @@
+{
+  "name": "capturescreenshot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "execute": "npx ts-node -e \"console.log(require('./index.ts').handler());\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@sparticuz/chromium-min": "^123.0.1",
+    "puppeteer-core": "^22.10.1"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-s3": "^3.712.0"
+  }
+}
