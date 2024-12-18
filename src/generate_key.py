@@ -17,12 +17,6 @@ DIGIT_OFFSET = 48
 def lambda_handler(event, context):
     """Generate a shorten path for a destination URL."""
 
-    secret_key = os.environ.get('SECRET_KEY')
-    if event.get('HTTPAuthorization', '') != secret_key:
-        return {
-            'statusCode': 401,
-        }
-
     body = json.loads(event['body'])
     destination_url = body['destination_url']
     user_id = body.get('user_id',  '')
