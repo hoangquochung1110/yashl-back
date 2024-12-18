@@ -241,3 +241,9 @@ Temporary Items
 node_modules/
 
 *bruno/
+bruno.json
+*.bru
+
+cookies.json
+
+test/
