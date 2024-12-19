@@ -1,9 +1,10 @@
 import json
+import os
+
 import boto3
 
-
 s3_client = boto3.client('s3')
-redirect_bucket = 'www.ssan.me'
+redirect_bucket = os.environ['REDIRECT_BUCKET']
 
 
 def lambda_handler(event, context):
