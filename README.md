@@ -17,5 +17,10 @@ npm install
 
 3. Create deployment package
 ```
-zip -r deployment-package.zip index.js node_modules package.json
-````
+zip -r captureScreenshot.zip index.js node_modules package.json
+```
+
+4. Deploy it to AWS Lambda
+```
+aws lambda update-function-code --function-name captureScreenshot --zip-file fileb://captureScreenshot.zip
+```
