@@ -1,6 +1,3 @@
-// const puppeteer = require('puppeteer-core');
-// const chromium = require('@sparticuz/chromium-min');
-// const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium-min';
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
