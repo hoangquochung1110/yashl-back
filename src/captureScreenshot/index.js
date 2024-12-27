@@ -1,7 +1,7 @@
-import puppeteer from 'puppeteer-core';
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import chromium from '@sparticuz/chromium-min';
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import fsPromises from "fs/promises";
+import puppeteer from 'puppeteer-core';
 
 
 const email = process.env.META_EMAIL;
