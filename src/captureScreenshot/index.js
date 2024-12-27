@@ -17,50 +17,65 @@ const type = "png";
 
 
 export const handler = async (event) => {
-    // const key = JSON.parse(event.body).key;
-    // const url = JSON.parse(event.body).destinationUrl;
-    const key = event.body.key;
-    const url = event.body.destinationUrl;
+  let body;
 
-    const preview = await screenshot(url, email, password);
-    if (debug){
-        console.log("writing file locally...");
-        fsPromises.writeFile("./screenshots/screenshot.png", preview);
-        const response = {
-            statusCode: 200,
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                message: "Success",
-                data: {
-                    "url": `https://mock-bucket.s3.mock-region.amazonaws.com/${key}.${type}`
-                }
-            }),
-        };
-        return response
-    } else{
-        console.log("Putting object to bucket");
-        const putResponse = await putScreenshot(key, preview, "png");
-        const statusCode = putResponse.$metadata.httpStatusCode;
-        if (statusCode === 200){
-            const response = {
-                statusCode: 200,
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    message: "Success",
-                    data: {
-                        "url": `https://${bucket}.s3.${region}.amazonaws.com/${key}.${type}`
-                    }
-                }),
-            };
-            return response;
-        } else{
-            throw Error("Fail to put object. Status code: ", statusCode);
-        }
-    }
+  // Check if body is a string and attempt to parse it
+  if (typeof event.body === 'string') {
+      try {
+          body = JSON.parse(event.body);
+      } catch (error) {
+          // Handle the case where parsing fails
+          return { error: 'Invalid JSON string' };
+      }
+  } else if (typeof event.body === 'object') {
+      // If it's already an object, just use it directly
+      body = event.body;
+  } else {
+      return { error: 'Unsupported body type' };
+  }
+
+  const key = body.key;
+  const url = body.destinationUrl;
+
+  const preview = await screenshot(url, email, password);
+  if (debug){
+      console.log("writing file locally...");
+      fsPromises.writeFile("./screenshots/screenshot.png", preview);
+      const response = {
+          statusCode: 200,
+          headers: {
+              "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+              message: "Success",
+              data: {
+                  "url": `https://mock-bucket.s3.mock-region.amazonaws.com/${key}.${type}`
+              }
+          }),
+      };
+      return response
+  } else{
+      console.log("Putting object to bucket");
+      const putResponse = await putScreenshot(key, preview, "png");
+      const statusCode = putResponse.$metadata.httpStatusCode;
+      if (statusCode === 200){
+          const response = {
+              statusCode: 200,
+              headers: {
+                  "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                  message: "Success",
+                  data: {
+                      "url": `https://${bucket}.s3.${region}.amazonaws.com/${key}.${type}`
+                  }
+              }),
+          };
+          return response;
+      } else{
+          throw Error("Fail to put object. Status code: ", statusCode);
+      }
+  }
 };
 
 
