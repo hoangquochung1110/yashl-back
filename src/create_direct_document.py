@@ -8,17 +8,23 @@ redirect_bucket = os.environ['REDIRECT_BUCKET']
 
 
 def lambda_handler(event, context):
-    # Extracting details from the S3 event
-    preview_bucket_name = event['Records'][0]['s3']['bucket']['name']
+    """
+    Create HTML redirect page if new object is uploaded to trigger bucket
+    """
+
+    # Extracting trigger bucket name and object key from the S3 event
+    trigger_bucket_name = event['Records'][0]['s3']['bucket']['name']
     object_key = event['Records'][0]['s3']['object']['key'] # with extension
 
-    response = s3_client.head_object(Bucket=preview_bucket_name, Key=object_key)
+    # Retrieve metadata for HTML redirect page
+    response = s3_client.head_object(Bucket=trigger_bucket_name, Key=object_key)
     metadata = response['Metadata']
 
     destination_url = metadata.get('destination-url', '')
     title = metadata.get('title', '')
     key = metadata['key']
-    screenshot_preview_url = f"https://{preview_bucket_name}.s3.ap-southeast-1.amazonaws.com/{object_key}"
+    screenshot_preview_url = f"https://{trigger_bucket_name}.s3.ap-southeast-1.amazonaws.com/{object_key}"
+
     # Generate HTML content
     html_content = _create_redirect_document(
         title,
@@ -34,7 +40,7 @@ def lambda_handler(event, context):
         Bucket=redirect_bucket,
         Key=output_key,
         Body=html_content,
-        ContentType='text/html'
+        ContentType='text/html',
     )
 
     return {
