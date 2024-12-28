@@ -11,9 +11,7 @@ DIGIT_OFFSET = 48
 
 def lambda_handler(event, context):
     """
-    Accept request with path parameter as url shortened path
-    retrieve the url from the path parameter from the table above
-    then redirect users to destination url
+    Return the destination url for a shortened path.
     """
     path_params = event['pathParameters']
     shorten_path = path_params['shorten_path']
