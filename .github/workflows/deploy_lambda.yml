@@ -30,21 +30,27 @@ jobs:
       - name: Check for changes in Lambda function directory
         id: check_changes
         run: |
-          echo "Checking for changes in /src directory..."
-          if git diff --name-only HEAD~1 HEAD | grep '^src/'; then
-            echo "src-changes=true" >> $GITHUB_ENV
-          else
-            echo "src-changes=false" >> $GITHUB_ENV
-          fi
+          changed_files=$(git diff --name-only main origin/main | grep '^src/' | tr '\n' ',')
+          echo "changed_files=$changed_files" >> $GITHUB_OUTPUT
 
       - name: Deploy Lambda Function with .zip Deployment Package
-        if: env.src-changes == 'true'
+        id: deploy_lambda
+        if: steps.check_changes.outputs.changed_files != ''
         run: |
-          echo "Deploying updated Lambda functions..."
-          # Package your Lambda function
-          cd src  # Navigate to the Lambda function directory
-          zip -r ../${{ matrix.lambda }}.zip ${{ matrix.lambda }}.py
-          aws lambda update-function-code --function-name ${{ matrix.lambda }} --zip-file fileb://../${{ matrix.lambda }}.zip
+          changed_files="${{ steps.check_changes.outputs.changed_files }}"
+          IFS=',' read -r -a files <<< "$changed_files"
+          for file in "${files[@]}"; do
+            echo "Deploying $file ..."
+
+            file_with_extension="${file##*/}"
+            file_without_extension="${file_with_extension%.py}"
+
+            cd ./src/
+            echo "Creating zip file: ${file_without_extension}.zip"
+            zip -r "../${file_without_extension}.zip" "$file_with_extension"
+
+            echo "Deploying updated Lambda function: ${file_without_extension} ..."
+            aws lambda update-function-code --function-name "${file_without_extension}" --zip-file fileb://"../${file_without_extension}.zip"
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
