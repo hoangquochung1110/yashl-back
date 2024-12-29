@@ -14,7 +14,9 @@ DIGIT_OFFSET = 48
 
 
 def lambda_handler(event, context):
-    """Generate a shorten path for a destination URL."""
+    """
+    Generate a shorten path for a destination URL.
+    """
 
     body = json.loads(event['body'])
     destination_url = body['destination_url']
