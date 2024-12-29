@@ -33,6 +33,9 @@ def lambda_handler(event, context):
 
 
 def resolve_url(table_name, key_id):
+    """
+    Get item by key_id
+    """
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(table_name)
     response = table.update_item(
