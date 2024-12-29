@@ -27,6 +27,7 @@ jobs:
         id: check_changes
         run: |
           changed_files=$(git diff --name-only main origin/main | grep '^src/' | tr '\n' ',')
+          echo "Changed files: $changed_files"
           echo "changed_files=$changed_files" >> $GITHUB_OUTPUT
 
       - name: Deploy Lambda Function with .zip Deployment Package
