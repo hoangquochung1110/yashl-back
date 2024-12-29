@@ -56,7 +56,16 @@ export const handler = async (event) => {
       return response
   } else{
       console.log("Putting object to bucket");
-      const putResponse = await putScreenshot(key, preview, "png");
+      const putResponse = await putScreenshot(
+          key, 
+          preview,
+          "png",
+          {
+              url: url,
+              key: key,
+              title: body.title || ''  // Optional title from the request
+          }
+      );
       const statusCode = putResponse.$metadata.httpStatusCode;
       if (statusCode === 200){
           const response = {
@@ -165,7 +174,7 @@ const screenshot = async (url, email, password) => {
 }
 
 
-const putScreenshot = async (key, screenshot, extension="png") => {
+const putScreenshot = async (key, screenshot, extension="png", metadata={}) => {
   try {
     const s3Client = new S3Client({
         region: region,
@@ -179,9 +188,14 @@ const putScreenshot = async (key, screenshot, extension="png") => {
         Bucket: bucket,
         Key: `${key}.${extension}`,
         Body: screenshot,
+        Metadata: {
+            'destination-url': metadata.url || '',
+            'key': metadata.key || '',
+            'title': metadata.title || '',
+        }
     });
     const response = await s3Client.send(command);
-    console.log("Successfully put object");
+    console.log("Successfully put object with metadata");
     return response;
   } catch(err){
     console.log(err);
