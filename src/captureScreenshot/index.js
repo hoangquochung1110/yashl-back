@@ -148,7 +148,7 @@ const screenshot = async (url, email, password) => {
       await loginButton.click();
       console.log('Clicked the login button.');
       // Save cookies after login
-      await saveCookies(page, cookiesPath);
+      // await saveCookies(page, cookiesPath);
       await page.waitForNavigation({
         timeout: 12000,
       });
