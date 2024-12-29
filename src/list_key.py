@@ -12,7 +12,9 @@ class DecimalEncoder(json.JSONEncoder):
 
 
 def lambda_handler(event, context):
-    """Lambda to handle list key request."""
+    """
+    Lambda to handle list key request.
+    """
     query_params = event['queryStringParameters']
     user_id = query_params['user_id']
     keys = list_keys_by_user_id(user_id)
