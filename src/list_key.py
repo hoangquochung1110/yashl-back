@@ -5,6 +5,7 @@ from boto3.dynamodb.conditions import Key
 
 
 class DecimalEncoder(json.JSONEncoder):
+    """Help class to serialize Decimal objects to JSON."""
     def default(self, obj):
         if isinstance(obj, Decimal):
             return str(obj)  # or float(obj)
