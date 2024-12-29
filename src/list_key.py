@@ -19,6 +19,7 @@ def lambda_handler(event, context):
     query_params = event['queryStringParameters']
     user_id = query_params['user_id']
     keys = list_keys_by_user_id(user_id)
+
     return {
         'statusCode': 200,
         'body': json.dumps(keys, cls=DecimalEncoder),
