@@ -9,10 +9,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        lambda: [generate_key, resolve_key, list_key, create_direct_document]  # List your Lambda function names here
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
