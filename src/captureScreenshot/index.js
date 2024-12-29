@@ -133,8 +133,10 @@ const screenshot = async (url, email, password) => {
     waitUntil: 'networkidle2',
   });
   if (await page.$('input[name=email]') !== null) {
+    console.log("Inputting email ...");
     await page.type('input[name="email"]', email, {delay: 100});
     await page.keyboard.press('Tab');
+    console.log("Inputting password ...");
     await page.type('input[name="pass"]', password, {delay: 100});
     try{
       const loginButton = await page.waitForSelector(
@@ -146,7 +148,7 @@ const screenshot = async (url, email, password) => {
       await loginButton.click();
       console.log('Clicked the login button.');
       // Save cookies after login
-      // await saveCookies(page, cookiesPath);
+      await saveCookies(page, cookiesPath);
       await page.waitForNavigation({
         timeout: 12000,
       });
@@ -166,7 +168,7 @@ const screenshot = async (url, email, password) => {
   try{
     const screenshot = await page.screenshot({type: "png"});
     console.log("Screenshot saved. Closing the browser...");
-    await browser.close();
+    browser.close().catch(err => console.error('Error closing browser:', err));  // Non-blocking close
     return screenshot;
   } catch(err){
     throw Error('Can not take screenshot');
