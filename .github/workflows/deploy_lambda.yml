@@ -48,6 +48,7 @@ jobs:
 
             echo "Deploying updated Lambda function: ${file_without_extension} ..."
             aws lambda update-function-code --function-name "${file_without_extension}" --zip-file fileb://"../${file_without_extension}.zip"
+          done
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
