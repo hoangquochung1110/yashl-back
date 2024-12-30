@@ -104,7 +104,7 @@ const screenshot = async (url, email, password) => {
           height: 844,
         },
       executablePath: await chromium.executablePath(
-          'https://github.com/Sparticuz/chromium/releases/download/v123.0.1/chromium-v123.0.1-pack.tar',
+          'https://yashl-preview.s3.ap-southeast-1.amazonaws.com/Chromium+v123.0.1+Pack.tar',
       ),
       headless: chromium.headless,
     });
