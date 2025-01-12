@@ -3,112 +3,86 @@ import chromium from '@sparticuz/chromium-min';
 import fsPromises from "fs/promises";
 import puppeteer from 'puppeteer-core';
 
-
-const email = process.env.META_EMAIL;
-const password = process.env.META_PASSWORD;
 // identify whether we are running locally or in AWS
 const isLocal = process.env.AWS_EXECUTION_ENV === undefined;
 // should put object to s3 or not
 const debug = process.env.DEBUG === "true";
+const awsExecutionPath = process.env.CHROMIUM_EXECUTABLE_PATH
 
-const region = process.env.S3_REGION;
-const bucket = process.env.S3_BUCKET;
-const type = "png";
+
+const AWS_CONFIG = {
+  region: process.env.S3_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    sessionToken: process.env.AWS_SESSION_TOKEN,
+  }
+};
+
+const S3_CONFIG = {
+  bucket: process.env.S3_BUCKET,
+  type: "png",
+};
+
+
+async function handleEventBody(event) {
+  if (typeof event.body === 'string') {
+    try {
+      return JSON.parse(event.body);
+    } catch (error) {
+      throw new Error('Invalid JSON string');
+    }
+  } else if (typeof event.body === 'object') {
+    return event.body;
+  } else {
+    throw new Error('Unsupported body type');
+  }
+}
 
 
 export const handler = async (event) => {
-  let body;
-
-  // Check if body is a string and attempt to parse it
-  if (typeof event.body === 'string') {
-      try {
-          body = JSON.parse(event.body);
-      } catch (error) {
-          // Handle the case where parsing fails
-          return { error: 'Invalid JSON string' };
-      }
-  } else if (typeof event.body === 'object') {
-      // If it's already an object, just use it directly
-      body = event.body;
-  } else {
-      return { error: 'Unsupported body type' };
-  }
+  const body = await handleEventBody(event)
 
   const key = body.key;
   const url = body.destinationUrl;
 
-  const preview = await screenshot(url, email, password);
+  const preview = await screenshot(url);
   if (debug){
-      console.log("writing file locally...");
-      fsPromises.writeFile("./screenshots/screenshot.png", preview);
-      const response = {
-          statusCode: 200,
-          headers: {
-              "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-              message: "Success",
-              data: {
-                  "url": `https://mock-bucket.s3.mock-region.amazonaws.com/${key}.${type}`
-              }
-          }),
-      };
-      return response
+    console.log("writing file locally...");
+    await fsPromises.writeFile(`./screenshots/${key}.${S3_CONFIG.type}`, preview);
+    return {
+      statusCode: 200,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "Success", data: { url: `https://mock-bucket.s3.mock-region.amazonaws.com/${key}.${S3_CONFIG.type}` } }),
+    };
   } else{
       console.log("Putting object to bucket");
       const putResponse = await putScreenshot(
-          key, 
-          preview,
-          "png",
-          {
-              url: url,
-              key: key,
-              title: body.title || ''  // Optional title from the request
-          }
+        key,
+        preview,
+        {
+          'destination-url': url,
+          'key': key,
+          'title': body.title || '',
+        }
       );
-      const statusCode = putResponse.$metadata.httpStatusCode;
-      if (statusCode === 200){
-          const response = {
-              statusCode: 200,
-              headers: {
-                  "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                  message: "Success",
-                  data: {
-                      "url": `https://${bucket}.s3.${region}.amazonaws.com/${key}.${type}`
-                  }
-              }),
-          };
-          return response;
-      } else{
-          throw Error("Fail to put object. Status code: ", statusCode);
-      }
+      return {
+        statusCode: putResponse.$metadata.httpStatusCode,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: 'Success', data: { url: `https://${S3_CONFIG.bucket}.s3.${AWS_CONFIG.region}.amazonaws.com/${key}.${S3_CONFIG.type}` } }),
+      };
   }
 };
 
 
-const screenshot = async (url, email, password) => {
+const screenshot = async (url) => {
   let browser;
-  if (isLocal){
-    browser = await puppeteer.launch({
-      executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      headless: false,
-    });
-    console.log("running locally");
-  } else{
-    browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: {
-          width: 392,
-          height: 844,
-        },
-      executablePath: await chromium.executablePath(
-          'https://yashl-preview.s3.ap-southeast-1.amazonaws.com/Chromium+v123.0.1+Pack.tar',
-      ),
-      headless: chromium.headless,
-    });
-  }
+  browser = await puppeteer.launch({
+    executablePath: isLocal ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : await chromium.executablePath(awsExecutionPath),
+    headless: !isLocal,
+    args: isLocal ? [] : chromium.args,
+    defaultViewport: isLocal ? null : { width: 392, height: 844 },
+  });
 
   const context = browser.defaultBrowserContext();
   await context.overridePermissions('https://www.facebook.com', ['notifications']);
@@ -121,42 +95,13 @@ const screenshot = async (url, email, password) => {
       isMobile: true, 
   });
 
-  // Load cookies if they exist
-  const cookiesPath = './cookies.json';
-  try {
-    console.log("Loading cookies...");
-    await loadCookies(page, cookiesPath);
-  } catch (error) {
-    console.log('No cookies found, proceeding without them.');
-  }
+  console.log("Going to ", url);
   await page.goto(url, {
     waitUntil: 'networkidle2',
   });
   if (await page.$('input[name=email]') !== null) {
-    console.log("Inputting email ...");
-    await page.type('input[name="email"]', email, {delay: 100});
-    await page.keyboard.press('Tab');
-    console.log("Inputting password ...");
-    await page.type('input[name="pass"]', password, {delay: 100});
-    try{
-      const loginButton = await page.waitForSelector(
-        '[aria-label="Accessible login button"]',
-        {
-          timeout: 2000,
-        }
-      )
-      await loginButton.click();
-      console.log('Clicked the login button.');
-      // Save cookies after login
-      // await saveCookies(page, cookiesPath);
-      await page.waitForNavigation({
-        timeout: 12000,
-      });
-    } catch(err){
-        // const err_msg = 'Login button not found.'
-        // console.log(err);
-        throw Error(err);
-    }
+    console.log("Pressing key Escape...");
+    await page.keyboard.press("Escape");
   }
 
   await page.setViewport({ 
@@ -176,34 +121,17 @@ const screenshot = async (url, email, password) => {
 }
 
 
-const putScreenshot = async (key, screenshot, extension="png", metadata={}) => {
-  try {
-    const s3Client = new S3Client({
-        region: region,
-        credentials: {
-            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-            sessionToken: process.env.AWS_SESSION_TOKEN,
-        }
-    });
-    const command = new PutObjectCommand({
-        Bucket: bucket,
-        Key: `${key}.${extension}`,
-        Body: screenshot,
-        Metadata: {
-            'destination-url': metadata.url || '',
-            'key': metadata.key || '',
-            'title': metadata.title || '',
-        }
-    });
-    const response = await s3Client.send(command);
-    console.log("Successfully put object with metadata");
-    return response;
-  } catch(err){
-    console.log(err);
-  }
+const putScreenshot = async (key, screenshot, metadata={}) => {
+  console.log("Uploading to S3...");
+  const s3Client = new S3Client(AWS_CONFIG);
+  const command = new PutObjectCommand({
+    Bucket: S3_CONFIG.bucket,
+    Key: `${key}.${S3_CONFIG.type}`,
+    Body: screenshot,
+    Metadata: metadata,
+  });
+  return await s3Client.send(command);
 }
-
 
 async function saveCookies(page, filePath) {
   const cookies = await page.cookies();
