@@ -22,7 +22,7 @@ zip -r captureScreenshot.zip index.js node_modules package.json
 
 4. Deploy it to AWS Lambda
 ```
-aws lambda update-function-code --function-name trelloScreenshot --zip-file fileb://trelloScreenshot.zip
+aws lambda update-function-code --function-name captureScreenshot --zip-file fileb://captureScreenshot.zip
 ```
 
 
