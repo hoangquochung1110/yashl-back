@@ -3,7 +3,7 @@ import fsPromises from "fs/promises";
 import puppeteer from 'puppeteer-core';
 
 
-export default class BrowserAutomation {
+export class BrowserAutomation {
   constructor(config = {}) {
     const defaultConfig = {
       isLocal: process.env.AWS_EXECUTION_ENV === undefined,
@@ -211,11 +211,27 @@ export default class BrowserAutomation {
     try {
       console.log('Taking screenshot');
       const screenshot = await this.page.screenshot(config);
+      this.browser.close().catch(err => console.error('Error closing browser:', err));
       return screenshot;
     } catch (error) {
       throw new Error(`Screenshot failed: ${error.message}`);
-    } finally {
-      await this.browser.close().catch(err => console.error('Error closing browser:', err));
     }
+  }
+}
+
+
+export class MetaBrowserAutomation extends BrowserAutomation{
+
+  async initialize(options = {}) {
+    const defaultOptions = {
+      viewport: { width: 1200, height: 800, deviceScaleFactor: 1 },
+      mobile: true,
+    };
+    await super.initialize({ ...defaultOptions, ...options });
+  }
+
+  async navigateAndWait(url, options = {}){
+    options.authStrategy = 'dismiss';
+    await super.navigateAndWait(url, options)
   }
 }
