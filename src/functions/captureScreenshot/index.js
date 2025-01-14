@@ -32,17 +32,17 @@ async function handleEventBody(event) {
 export const handler = async (event) => {
   const body = await handleEventBody(event)
 
-  const key = body.key;
-  const url = body.destinationUrl;
+  const shortPath = body.short_path;
+  const url = body.target_url;
 
   console.log('Initializing browser automation');
   const automation = new MetaBrowserAutomation(BROWSER_CONFIG);
   await automation.initialize();
   await automation.navigateAndWait(url);
   const screenshot = await automation.takeScreenshot();
-  return putToS3(key, screenshot, {
+  return putToS3(shortPath, screenshot, {
     'destination-url': url,
-    'key': key,
+    'key': shortPath,
     'title': body.title || '',
   })
 };
