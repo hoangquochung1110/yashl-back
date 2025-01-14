@@ -37,7 +37,7 @@ def lambda_handler(event, context):
         case  "POST":
             body = json.loads(event['body'])
             user_id = body.get('user_id', '')
-            url = body['destination_url']
+            url = body['target_url']
             return generate_key(url=url, user_id=user_id)
         case _:
             return create_response(405, {'error': 'Method not allowed'})
