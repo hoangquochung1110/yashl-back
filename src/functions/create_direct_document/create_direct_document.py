@@ -5,7 +5,7 @@ from urllib.parse import unquote, urlparse
 import boto3
 
 s3_client = boto3.client('s3')
-redirect_bucket = os.environ.get('REDIRECT_BUCKET', '')
+redirect_bucket = os.environ.get('S3_REDIRECT_BUCKET', '')  # TODO: rename
 
 def lambda_handler(event, context):
     """
