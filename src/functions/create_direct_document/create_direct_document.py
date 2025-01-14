@@ -21,10 +21,12 @@ def lambda_handler(event, context):
     response = s3_client.head_object(Bucket=trigger_bucket_name, Key=object_key)
     metadata = response['Metadata']
 
-    preview_url = f"https://{trigger_bucket_name}.s3.ap-southeast-1.amazonaws.com/{object_key}"
-
     # Generate HTML content
-    html_content = create_redirect_document(metadata, preview_url)
+    html_content = create_redirect_document(
+        title=metadata.get('title'),
+        redirect_url=metadata['destination-url'],
+        image_url=f"https://{trigger_bucket_name}.s3.ap-southeast-1.amazonaws.com/{object_key}",
+    )
 
     # Define the output bucket and file name
     key = metadata['key']
@@ -49,7 +51,12 @@ def lambda_handler(event, context):
     }
 
 
-def create_redirect_document(preview_metadata, preview_url, *args, **kwargs):
+def create_redirect_document(
+    title,
+    redirect_url,
+    image_url,
+    *args, **kwargs,
+):
     """
     Retrieve url and title from s3 object metadata.
 
@@ -66,7 +73,13 @@ def create_redirect_document(preview_metadata, preview_url, *args, **kwargs):
     )
 
 
-def _create_redirect_document(title, preview_url, destination_url, description='', *args, **kwargs):
+def _create_redirect_document(
+    title,
+    destination_url,
+    image_url,
+    description='',
+    *args, **kwargs
+):
     html_content = f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -82,7 +95,7 @@ def _create_redirect_document(title, preview_url, destination_url, description='
     <!-- Open Graph Meta Tags -->
     <meta property="og:title" content="{title}">
     <meta property="og:description" content="{description}">
-    <meta property="og:image" content="{preview_url}">
+    <meta property="og:image" content="{image_url}">
     <meta property="og:url" content="{destination_url}">
     <meta property="og:site_name" content="{destination_url}">
 
@@ -90,7 +103,7 @@ def _create_redirect_document(title, preview_url, destination_url, description='
     <meta name="twitter:card" content="">
     <meta name="twitter:title" content="{title}">
     <meta name="twitter:description" content="{description}">
-    <meta name="twitter:image" content="{preview_url}">
+    <meta name="twitter:image" content="{image_url}">
     <meta name="twitter:image:alt" content="">
     
     <!-- Apple Mobile Web App Meta Tags -->
