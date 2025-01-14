@@ -7,79 +7,115 @@ import boto3
 s3_client = boto3.client('s3')
 redirect_bucket = os.environ.get('REDIRECT_BUCKET', '')
 
-
 def lambda_handler(event, context):
     """
-    Create HTML redirect page if new object is uploaded to trigger bucket
+    Handle both S3 events and API Gateway requests to create HTML redirect pages
     """
+    try:
+        # Parse event and get normalized data
+        page_data = parse_event(event)
+        return create_redirect_page(page_data)
+    except ValueError as e:
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'message': str(e)})
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'message': f'Internal error: {str(e)}'})
+        }
 
-    # Extracting trigger bucket name and object key from the S3 event
-    trigger_bucket_name = event['Records'][0]['s3']['bucket']['name']
-    object_key = event['Records'][0]['s3']['object']['key'] # with extension
+def parse_event(event):
+    """
+    Parse different event types and return normalized data
+    Returns: {
+        'key': str,
+        'title': str,
+        'destination_url': str,
+        'image_url': str
+    }
+    """
+    # S3 Event
+    if 'Records' in event and event['Records'][0].get('eventSource') == 'aws:s3':
+        trigger_bucket_name = event['Records'][0]['s3']['bucket']['name']
+        object_key = event['Records'][0]['s3']['object']['key']
+        
+        # Get metadata from S3 object
+        response = s3_client.head_object(Bucket=trigger_bucket_name, Key=object_key)
+        metadata = response['Metadata']
+        
+        if 'destination-url' not in metadata:
+            raise ValueError("Missing destination-url in S3 object metadata")
+            
+        return {
+            'key': metadata['key'],
+            'title': metadata.get('title', ''),
+            'destination_url': metadata['destination-url'],
+            'image_url': f"https://{trigger_bucket_name}.s3.ap-southeast-1.amazonaws.com/{object_key}"
+        }
+    
+    # API Gateway Event
+    else:
+        try:
+            body = json.loads(event.get('body', '{}'))
+        except json.JSONDecodeError:
+            raise ValueError('Invalid JSON in request body')
+            
+        # Validate required fields
+        required_fields = ['key', 'destination_url', 'image_url']
+        missing_fields = [field for field in required_fields if field not in body]
+        if missing_fields:
+            raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
+            
+        return {
+            'key': body['key'],
+            'title': body.get('title', ''),
+            'destination_url': body['destination_url'],
+            'image_url': body['image_url']
+        }
 
-    # Retrieve metadata for HTML redirect page
-    response = s3_client.head_object(Bucket=trigger_bucket_name, Key=object_key)
-    metadata = response['Metadata']
+def create_redirect_page(page_data):
+    """
+    Create HTML redirect page with normalized data
+    """
+    try:
+        # Get or generate title
+        title = page_data['title'] or guess_title(page_data['destination_url'])
 
-    # Generate HTML content
-    html_content = create_redirect_document(
-        title=metadata.get('title'),
-        redirect_url=metadata['destination-url'],
-        image_url=f"https://{trigger_bucket_name}.s3.ap-southeast-1.amazonaws.com/{object_key}",
-    )
+        # Generate HTML content
+        html_content = _create_redirect_document(
+            title=title,
+            destination_url=page_data['destination_url'],
+            image_url=page_data['image_url'],
+        )
 
-    # Define the output bucket and file name
-    key = metadata['key']
-    output_key = f"{key}.html"  # Change extension
+        # Upload HTML content to S3
+        output_key = f"{page_data['key']}.html"
+        s3_client.put_object(
+            Bucket=redirect_bucket,
+            Key=output_key,
+            Body=html_content,
+            ContentType='text/html',
+        )
 
-    # Upload HTML content to S3
-    s3_client.put_object(
-        Bucket=redirect_bucket,
-        Key=output_key,
-        Body=html_content,
-        ContentType='text/html',
-    )
-
-    return {
-        'statusCode': 200,
-        'body': json.dumps(
-            {
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
                 'message': 'HTML redirect page created successfully!',
                 'url': f'https://s3.ap-southeast-1.amazonaws.com/{redirect_bucket}/{output_key}'
-            }
-        )
-    }
+            })
+        }
 
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'message': f'Error creating redirect page: {str(e)}'
+            })
+        }
 
-def create_redirect_document(
-    title,
-    redirect_url,
-    image_url,
-    *args, **kwargs,
-):
-    """
-    Retrieve url and title from s3 object metadata.
-
-    Generate title if needed.
-    """
-    destination_url = preview_metadata['destination-url']
-    title = preview_metadata.get('title', '')
-    if title == '':
-        title = guess_title(destination_url)
-    return _create_redirect_document(
-        title,
-        preview_url,
-        destination_url,
-    )
-
-
-def _create_redirect_document(
-    title,
-    destination_url,
-    image_url,
-    description='',
-    *args, **kwargs
-):
+def _create_redirect_document(title, destination_url, image_url, description=''):
     html_content = f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -131,7 +167,6 @@ def _create_redirect_document(
 
     return html_content
 
-
 def de_slugify(slug):
     # Split by hyphens and remove any empty strings
     words = [word for word in slug.split('-') if word]
@@ -140,7 +175,6 @@ def de_slugify(slug):
     result = ' '.join(word for word in words if not word.isdigit()).title()
     
     return result
-
 
 def guess_title(url):
     parsed_url = urlparse(url)
