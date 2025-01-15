@@ -15,6 +15,7 @@ UPPERCASE_OFFSET = 55
 LOWERCASE_OFFSET = 61
 DIGIT_OFFSET = 48
 
+lambda_client = boto3.client('lambda')
 
 def lambda_handler(event, context):
     """
@@ -66,8 +67,27 @@ def generate_key(body, *args, **kwargs):
         segments=segments,
     )
     short_url = ShortUrl()
-    short_url.create(**key_data)            
+    short_url.create(**key_data)
+    redirect_key = f"{short_path}.html"
+    if segments:
+        redirect_key = "/".join(segments) + "/" + redirect_key
+    preview_url = f"https://{os.environ['S3_PREVIEW_BUCKET']}.s3.{os.environ['S3_REGION']}.amazonaws.com/{short_path}.png"
+    submit_async_task({
+            'key': redirect_key,
+            'target_url': url,
+            'title': '',
+            'description': '',
+            'preview_url': preview_url,
+        })
     return create_response(200, key_data)
+
+def submit_async_task(response):
+    # Invoke async function to continue
+    lambda_client.invoke(
+        FunctionName='redirect',
+        InvocationType='Event',
+        Payload=json.dumps(response)
+    )
 
 def resolve_key(path_params, *args, **kwargs):
     short_path = path_params['short_path']
