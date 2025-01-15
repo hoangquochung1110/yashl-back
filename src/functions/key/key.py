@@ -25,15 +25,10 @@ def lambda_handler(event, context):
     match method:
         case "GET":
             resource_path = request_ctx['resourcePath']
-            if resource_path.endswith('/{short_key}'):
-                path_params = event['pathParameters']
-                short_key = path_params['short_key']
-                key = saturate(short_key)
-                return resolve_key(key=key, short_path=short_key)
-            else:
-                query_params = event['queryStringParameters']
-                user_id = query_params.get('user_id')
-                return list_keys(user_id=user_id)
+            if resource_path.endswith('/{short_path}'):
+                return resolve_key(path_params=event['pathParameters'])
+            else:                
+                return list_keys(query_params=event['queryStringParameters'])
         case  "POST":
             body = json.loads(event['body'])
             user_id = body.get('user_id', '')
@@ -43,7 +38,7 @@ def lambda_handler(event, context):
             return create_response(405, {'error': 'Method not allowed'})
 
 
-def create_response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
+def create_response(status_code: int, body: dict[str, Any], encoder_cls=None) -> dict[str, Any]:
     """Create a standardized API Gateway response."""
     return {
         'statusCode': status_code,
@@ -53,7 +48,7 @@ def create_response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
             'Access-Control-Allow-Headers': 'Content-Type',
             'Access-Control-Allow-Methods': 'OPTIONS,POST,GET',
         },
-        'body': json.dumps(body)
+        'body': json.dumps(body, cls=encoder_cls)
     }
 
 def generate_key(url, user_id=""):
@@ -63,26 +58,20 @@ def generate_key(url, user_id=""):
         key_id=key_id,
         short_path=shortened_path,
         target_url=url,
+        user_id=user_id or "<anonymous>",
+        hits=0,
     )
     short_url = ShortUrl()
-    short_url.create(**key_data)
-    if user_id:
-        user = User()
-        user_data = {"key_id": key_id}
-        user_item = user.get(user_id)
-        if user_item is None:
-            user.create(user_id=user_id, keys=[user_data])
-        else:
-            user.update(user_id, user_data) 
-            
-    return create_response(200, {'short_path': shortened_path})
+    short_url.create(**key_data)            
+    return create_response(200, key_data)
 
-def resolve_key(key, short_path):
+def resolve_key(path_params):
+    short_path = path_params['short_path']
+    key = saturate(short_path)
     short_url = ShortUrl()
     item = short_url.update(
         key={
             'key_id': key,
-            'short_path': short_path,
         }
     )
     if item:
@@ -104,26 +93,41 @@ def resolve_key(key, short_path):
         )
 
 
-def list_keys(user_id, *args, **kwargs):
-    user = User()
+def list_keys(
+    query_params,
+    *args,
+    **kwargs
+):
+    if not query_params:
+        return create_response(
+            200,
+            {'keys': []},
+        )
+
+    user_id = query_params.get('user_id')
     short_url = ShortUrl()
-    user_item = user.get(user_id=user_id)
-    key_ids = [item["key_id"] for item in user_item["keys"]]
-    keys = [
-        {
-            'key_id': int(key_id),
-            'short_path': dehydrate(int(key_id))
+
+    index_name = ''
+    key_conditions = {}
+
+    if user_id:
+        index_name = 'user_id-index'
+        key_conditions = {
+            'user_id': {
+                'AttributeValueList': [user_id],
+                'ComparisonOperator': 'EQ'
+            }
         }
-        for key_id in key_ids
-    ]
-    res = short_url.get_batch(keys)
-    return {
-        'statusCode': 200,
-        'body': json.dumps({'keys': res}, cls=DecimalEncoder),
-        'headers': {
-            'Access-Control-Allow-Origin': '*',
-        }
-    }
+
+    items = short_url.query(
+        index_name=index_name,
+        key_conditions=key_conditions,
+    )
+    return create_response(
+        200,
+        {'keys': items},
+        encoder_cls=DecimalEncoder 
+    )
 
 
 def dehydrate(integer):
@@ -211,7 +215,7 @@ class ShortUrl:
         key_id,
         short_path,
         target_url,
-        hits=0,
+        **kwargs,
     ):
         """
         Inserts a new item into the DynamoDB table.
@@ -225,7 +229,7 @@ class ShortUrl:
             'key_id': key_id,
             'short_path': short_path,
             'target_url': target_url,
-            'hits': hits
+            **kwargs,
         }
         try:
             response = self.table.put_item(Item=item)
@@ -266,101 +270,12 @@ class ShortUrl:
             print(f"Error retrieving item from DynamoDB: {e}")
             raise
 
-
-class User:
-    def __init__(self):
-        """
-        To represent User item.
-
-        Attrs:
-        - user_id (partition key)
-        - keys: List of keys
-            - key_id
-        """
-        self.table_name = os.environ["DYNAMO_DB_USER"]
-        self.region = 'ap-southeast-1'
-        self.dynamodb = boto3.resource('dynamodb', region_name=self.region)
-        self.table = self.dynamodb.Table(self.table_name)
-
-    def create(self, user_id: str, keys: list = None):
-        """
-        Create or update a user item in DynamoDB.
-
-        Args:
-            user_id: Unique identifier for the user
-            keys: List of key dictionaries containing key_id, short_path, target_url, and hits
-        
-        Returns:
-            Response from DynamoDB
-        
-        Raises:
-            BotoCoreError, ClientError: If DynamoDB operation fails
-        """
-        item = {
-            'user_id': user_id,
-            'keys': keys or []
-        }
-
-        try:
-            response = self.table.put_item(Item=item)
-            return response
-        except (BotoCoreError, ClientError) as e:
-            print(f"Error creating user in DynamoDB: {e}")
-            raise
-
-    def get(self, user_id: str):
-        """
-        Retrieve a user item from DynamoDB.
-
-        Args:
-            user_id: Unique identifier for the user
-        
-        Returns:
-            Dict containing user data if found, None otherwise
-        
-        Raises:
-            BotoCoreError, ClientError: If DynamoDB operation fails
-        """
-        try:
-            response = self.table.get_item(
-                Key={
-                    'user_id': user_id
-                }
-            )
-            return response.get('Item')
-        except (BotoCoreError, ClientError) as e:
-            print(f"Error retrieving user from DynamoDB: {e}")
-            raise
-
-    def update(self, user_id: str, user_data: dict):
-        """
-        Update a user's keys list by adding a new key.
-        
-        Returns:
-            Updated user data if successful
-        
-        Raises:
-            BotoCoreError, ClientError: If DynamoDB operation fails
-        """
-        try:
-            response = self.table.update_item(
-                Key={
-                    'user_id': user_id,
-                },
-                UpdateExpression="SET #keys = list_append(if_not_exists(#keys, :empty_list), :new_key)",
-                ExpressionAttributeNames={
-                    '#keys': 'keys'
-                },
-                ExpressionAttributeValues={
-                    ':new_key': [user_data],
-                    ':empty_list': []
-                },
-                ReturnValues='ALL_NEW'
-            )
-            return response.get('Attributes')
-        except (BotoCoreError, ClientError) as e:
-            print(f"Error updating user in DynamoDB: {e}")
-            raise
+    def query(self, index_name, key_conditions, **kwargs):
+        response = self.table.query(
+            IndexName=index_name,
+            KeyConditions=key_conditions,
+        )
+        return response['Items']
 
 
 class DecimalEncoder(json.JSONEncoder):
