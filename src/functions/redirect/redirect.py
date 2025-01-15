@@ -58,11 +58,11 @@ def _create_redirect_document(target_url, title, preview_url, description=''):
     <meta name="keywords" content="">
     
     <!-- Open Graph Meta Tags -->
+    <meta property="og:type" content="website" />
     <meta property="og:title" content="{title}">
     <meta property="og:description" content="{description}">
-    <meta property="og:image" content="{preview_url}">
     <meta property="og:url" content="{target_url}">
-    <meta property="og:site_name" content="{target_url}">
+    <meta property="og:image" content="{preview_url}">
 
     <!-- Twitter Card Meta Tags -->
     <meta name="twitter:card" content="">
@@ -70,7 +70,7 @@ def _create_redirect_document(target_url, title, preview_url, description=''):
     <meta name="twitter:description" content="{description}">
     <meta name="twitter:image" content="{preview_url}">
     <meta name="twitter:image:alt" content="">
-    
+
     <!-- Apple Mobile Web App Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
