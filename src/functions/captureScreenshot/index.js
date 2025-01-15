@@ -40,11 +40,7 @@ export const handler = async (event) => {
   await automation.initialize();
   await automation.navigateAndWait(url);
   const screenshot = await automation.takeScreenshot();
-  return putToS3(shortPath, screenshot, {
-    'destination-url': url,
-    'key': shortPath,
-    'title': body.title || '',
-  })
+  return putToS3(shortPath, screenshot)
 };
 
 
