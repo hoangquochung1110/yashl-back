@@ -30,10 +30,7 @@ def lambda_handler(event, context):
             else:                
                 return list_keys(query_params=event['queryStringParameters'])
         case  "POST":
-            body = json.loads(event['body'])
-            user_id = body.get('user_id', '')
-            url = body['target_url']
-            return generate_key(url=url, user_id=user_id)
+            return generate_key(body=event['body'])
         case _:
             return create_response(405, {'error': 'Method not allowed'})
 
@@ -51,21 +48,28 @@ def create_response(status_code: int, body: dict[str, Any], encoder_cls=None) ->
         'body': json.dumps(body, cls=encoder_cls)
     }
 
-def generate_key(url, user_id=""):
-    shortened_path = ShortUrl.generate_short_path()
-    key_id = saturate(shortened_path)
+def generate_key(body, *args, **kwargs):
+    body = json.loads(body)
+
+    short_path = ShortUrl.generate_short_path()
+    key_id = saturate(short_path)
+    user_id = body.get('user_id', '')
+    url = body['target_url']
+    segments = body.get('segments', [])
+
     key_data = dict(
         key_id=key_id,
-        short_path=shortened_path,
+        short_path=short_path,
         target_url=url,
         user_id=user_id or "<anonymous>",
         hits=0,
+        segments=segments,
     )
     short_url = ShortUrl()
     short_url.create(**key_data)            
     return create_response(200, key_data)
 
-def resolve_key(path_params):
+def resolve_key(path_params, *args, **kwargs):
     short_path = path_params['short_path']
     key = saturate(short_path)
     short_url = ShortUrl()
@@ -75,23 +79,11 @@ def resolve_key(path_params):
         }
     )
     if item:
-        return {    
-                'statusCode': 200,
-                'headers': {
-                    'Access-Control-Allow-Headers': 'Content-Type',
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Methods': 'OPTIONS,POST,GET',
-                },
-                'body': json.dumps({
-                    'target_url': item.get('target_url'),
-                }),
-            }
-    else:
-        return create_response(
-            404,
-            {'error': f"Item with key_id {key} not found"},
-        )
-
+        return create_response(200, item, encoder_cls=DecimalEncoder)
+    return create_response(
+        404,
+        {'error': f"Item with key_id {key} not found"},
+    )
 
 def list_keys(
     query_params,
@@ -204,7 +196,6 @@ class ShortUrl:
         self.dynamodb = boto3.resource('dynamodb', region_name=self.region)
         self.table = self.dynamodb.Table(self.table_name)
 
-
     @classmethod
     def generate_short_path(cls: str):
         CHARACTERS = string.ascii_letters + string.digits
@@ -237,21 +228,6 @@ class ShortUrl:
         except (BotoCoreError, ClientError) as e:
             print(f"Error creating item in DynamoDB: {e}")
             raise
-
-    def get_batch(self, keys):
-        # Perform the batch get item operation
-        print(keys)
-        response = self.dynamodb.batch_get_item(
-            RequestItems={
-                self.table_name: {
-                    'Keys': keys
-                }
-            }
-        )
-
-        # Extract and return the items from the response
-        items = response.get('Responses', {}).get(self.table_name, [])
-        return items
 
     def update(self, key):
         try:
