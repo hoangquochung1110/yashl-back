@@ -1,44 +1,90 @@
+import base64
+import mimetypes
 import os
+
+from dataclasses import dataclass
 from urllib.parse import unquote, urlparse
 
 import boto3
 
-s3_client = boto3.client('s3')
 redirect_bucket = os.environ.get('S3_REDIRECT_BUCKET')
+s3_client = boto3.client('s3')
+
+
+@dataclass
+class Asset:
+    binary: bytes
+    extension: str
+
+
+@dataclass
+class Document:
+    """Metadata on HTML document."""
+    key: str
+    asset: Asset = None
+    title: str = ""
+    description: str = ""
+    redirect_url: str = ""
+    preview_url: str = ""
+
 
 def lambda_handler(event, context):
     """
     Handle both S3 events and API Gateway requests to create HTML redirect pages
     """
-    page_data = {
-            'key': event['key'],
-            'target_url': event['target_url'],
-            'title': event.get('title', ''),
-            'description': event.get('description', ''),
-            'preview_url': event.get('preview_url', ''),
-        }
+    page_data = Document(**event)
     return create_redirect_page(page_data)
 
 
-def create_redirect_page(page_data):
+def create_redirect_page(document: Document):
     """
     Create HTML redirect page with normalized data
     """
     # Get or generate title
-    title = page_data['title'] or guess_title(page_data['target_url'])
+    title = document.title or guess_title(document.redirect_url)
 
-    # Generate HTML content
-    html_content = _create_redirect_document(
-        target_url=page_data['target_url'],
-        title=title,
-        preview_url=page_data['preview_url'],
-        description=page_data['description'],
-    )
+    if document.redirect_url:
+        html_content = _create_redirect_document(
+            target_url=document.redirect_url,
+            title=title,
+            preview_url=document.preview_url,
+            description=document.description,
+        )
+    else:
+        asset = document.asset
+        if not asset.binary:
+            raise ValueError("Asset data is empty")
+        key = document.key
+        content_type = get_video_content_type(asset.extension)
+
+        try:
+            decoded_data = base64.b64decode(asset.binary)
+            if len(decoded_data) == 0:
+                raise ValueError("Decoded data is empty")
+        except Exception as decode_error:
+            print(f"Base64 decoding failed: {decode_error}")
+            raise
+        target_url = (
+            f"https://{os.environ['S3_PREVIEW_BUCKET']}.s3.{os.environ['S3_REGION']}"
+            f".amazonaws.com/{key}"
+        )
+        # Upload to S3 only if we have valid data
+        s3_client.put_object(
+            Bucket=os.environ['S3_PREVIEW_BUCKET'],
+            Key=key,
+            Body=decoded_data,
+            ContentType=content_type,
+        )
+
+        html_content = _create_streaming_document(
+            target_url=target_url,
+            title=document.title,
+        )
 
     # Upload HTML content to S3
     resp = s3_client.put_object(
         Bucket=redirect_bucket,
-        Key=page_data['key'],
+        Key=document.key,
         Body=html_content,
         ContentType='text/html',
     )
@@ -96,13 +142,59 @@ def _create_redirect_document(target_url, title, preview_url, description=''):
 
     return html_content
 
+def _create_streaming_document(target_url, title, content_type="video/mp4", preview_url='', description=''):
+    css_styles = '''
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        .video-container {
+            max-width: 800px;
+            width: 95%;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        video {
+            width: 100%;
+            display: block;
+        }
+    '''
+
+    html_content = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
+    <style>
+        {css_styles}
+    </style>
+</head>
+<body>
+    <div class="video-container">
+        <video controls>
+            <source id="videoSource" src="{target_url}" type="{content_type}">
+            Your browser does not support the video tag.
+        </video>
+    </div>
+</body>
+</html>
+"""
+    return html_content
+
 def de_slugify(slug):
     # Split by hyphens and remove any empty strings
     words = [word for word in slug.split('-') if word]
-    
     # Remove any leading/trailing numbers and convert to title case
     result = ' '.join(word for word in words if not word.isdigit()).title()
-    
     return result
 
 def guess_title(url):
@@ -113,3 +205,18 @@ def guess_title(url):
             last_segment = path_segments[-1]
             return de_slugify(unquote(last_segment))
     return ''
+
+
+def get_video_content_type(filename):
+    mime_type, _ = mimetypes.guess_type(filename)
+    if mime_type and mime_type.startswith('video/'):
+        return mime_type
+    # Fallback mappings
+    extensions = {
+        '.mov': 'video/quicktime',
+        '.mp4': 'video/mp4',
+        '.webm': 'video/webm',
+        '.avi': 'video/x-msvideo',
+    }
+    ext = os.path.splitext(filename.lower())[1]
+    return extensions.get(ext, 'video/mp4')

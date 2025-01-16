@@ -3,6 +3,7 @@ import math
 import os
 import secrets
 import string
+from dataclasses import asdict, dataclass
 from decimal import Decimal
 from typing import Any
 
@@ -14,6 +15,17 @@ BASE = 62
 UPPERCASE_OFFSET = 55
 LOWERCASE_OFFSET = 61
 DIGIT_OFFSET = 48
+
+
+@dataclass
+class RequestData:
+    user_id: str = "<anonymous>"
+    title: str = ""
+    description: str = ""
+    target_url: str = ""
+    asset: dict = None
+    segments: list = ()
+
 
 lambda_client = boto3.client('lambda')
 
@@ -30,7 +42,7 @@ def lambda_handler(event, context):
                 return resolve_key(path_params=event['pathParameters'])
             else:                
                 return list_keys(query_params=event['queryStringParameters'])
-        case  "POST":
+        case "POST":
             return generate_key(body=event['body'])
         case _:
             return create_response(405, {'error': 'Method not allowed'})
@@ -54,30 +66,42 @@ def generate_key(body, *args, **kwargs):
 
     short_path = ShortUrl.generate_short_path()
     key_id = saturate(short_path)
-    user_id = body.get('user_id', '')
     url = body['target_url']
     segments = body.get('segments', [])
-
+    request_data = RequestData(**body)
+    request_data_dict = asdict(request_data)
+    asset = request_data_dict.pop('asset', None)
     key_data = dict(
+        **request_data_dict,
         key_id=key_id,
         short_path=short_path,
-        target_url=url,
-        user_id=user_id or "<anonymous>",
         hits=0,
-        segments=segments,
     )
     short_url = ShortUrl()
     short_url.create(**key_data)
-    redirect_key = f"{short_path}.html"
-    if segments:
-        redirect_key = "/".join(segments) + "/" + redirect_key
-    preview_url = f"https://{os.environ['S3_PREVIEW_BUCKET']}.s3.{os.environ['S3_REGION']}.amazonaws.com/{short_path}.png"
-    submit_async_task({
-            'key': redirect_key,
-            'target_url': url,
+
+    # Create html document
+    keys = segments + [short_path]
+    key = "/".join(keys)
+
+    if request_data.target_url:
+        preview_url = (
+            f"https://{os.environ['S3_PREVIEW_BUCKET']}.s3.{os.environ['S3_REGION']}"
+            f".amazonaws.com/{short_path}.png"
+        )
+        submit_async_task({
+                'key': key,
+                'redirect_url': url,
+                'title': '',
+                'description': '',
+                'preview_url': preview_url,
+            })
+    elif asset:
+        submit_async_task({
+            'key': key,
             'title': '',
             'description': '',
-            'preview_url': preview_url,
+            'asset': asset
         })
     return create_response(200, key_data)
 
