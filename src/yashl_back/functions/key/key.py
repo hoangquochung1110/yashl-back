@@ -27,7 +27,7 @@ def lambda_handler(event, context):
             resource_path = request_ctx['resourcePath']
             if resource_path.endswith('/{short_path}'):
                 return resolve_key(path_params=event['pathParameters'])
-            else:                
+            else:
                 return list_keys(query_params=event['queryStringParameters'])
         case  "POST":
             body = json.loads(event['body'])
@@ -62,7 +62,7 @@ def generate_key(url, user_id=""):
         hits=0,
     )
     short_url = ShortUrl()
-    short_url.create(**key_data)            
+    short_url.create(**key_data)
     return create_response(200, key_data)
 
 def resolve_key(path_params):
@@ -75,7 +75,7 @@ def resolve_key(path_params):
         }
     )
     if item:
-        return {    
+        return {
                 'statusCode': 200,
                 'headers': {
                     'Access-Control-Allow-Headers': 'Content-Type',
@@ -126,7 +126,7 @@ def list_keys(
     return create_response(
         200,
         {'keys': items},
-        encoder_cls=DecimalEncoder 
+        encoder_cls=DecimalEncoder
     )
 
 
@@ -139,7 +139,7 @@ def dehydrate(integer):
     # so we just solve for that case here
     if integer == 0:
         return '0'
-    
+
     string = ""
     while integer > 0:
         remainder = integer % BASE
@@ -162,7 +162,7 @@ def true_ord(char):
     Turns a digit [char] in character representation
     from the number system with base [BASE] into an integer.
     """
-    
+
     if char.isdigit():
         return ord(char) - DIGIT_OFFSET
     elif 'A' <= char <= 'Z':
@@ -284,3 +284,52 @@ class DecimalEncoder(json.JSONEncoder):
         if isinstance(obj, Decimal):
             return str(obj)  # or float(obj)
         return super().default(obj)
+
+TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
+
+    <!-- Basic Meta Tags -->
+    <meta name="description" content="{description}">
+    <meta name="keywords" content="">
+
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="{title}">
+    <meta property="og:description" content="{description}">
+    <meta property="og:image" content="{image_url}">
+    <meta property="og:url" content="{destination_url}">
+    <meta property="og:site_name" content="{destination_url}">
+
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="">
+    <meta name="twitter:title" content="{title}">
+    <meta name="twitter:description" content="{description}">
+    <meta name="twitter:image" content="{image_url}">
+    <meta name="twitter:image:alt" content="">
+
+    <!-- Apple Mobile Web App Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="{title}">
+
+    <!-- Custom JavaScript -->
+    <script>
+        window.onload = function() {{
+            console.log("Page has loaded. Redirecting...");
+            // Redirect to a new URL
+            window.location.href = "{destination_url}";
+        }};
+    </script>
+</head>
+<body>
+    <!-- Optional: Add fallback content for users with JavaScript disabled -->
+    <noscript>
+        <p>If you are not redirected automatically, please <a href="{destination_url}">click here</a>.</p>
+    </noscript>
+</body>
+</html>
+"""
