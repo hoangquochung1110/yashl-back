@@ -7,6 +7,7 @@ functions = (
     "create_direct_document",
 )
 
+BASE_FUNCTION_PATH = "./src/yashl_back/functions/"
 
 @invoke.task
 def update_env_vars(context, function_name, path_to_env):
@@ -41,7 +42,7 @@ def update_code(context, function_name):
     """
     A wrapper of aws lambda update-function-code.
     """
-    path_to_function = f"./src/functions/{function_name}"
+    path_to_function = f"{BASE_FUNCTION_PATH}{function_name}"  # use pathlib instead
 
     if function_name == "captureScreenshot":
         raise NotImplementedError("Not implemented yet")
