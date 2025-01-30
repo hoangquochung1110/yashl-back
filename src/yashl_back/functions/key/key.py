@@ -3,6 +3,7 @@ import math
 import os
 import secrets
 import string
+from dataclasses import asdict, dataclass
 from decimal import Decimal
 from typing import Any
 
@@ -14,6 +15,97 @@ BASE = 62
 UPPERCASE_OFFSET = 55
 LOWERCASE_OFFSET = 61
 DIGIT_OFFSET = 48
+
+DOMAIN = os.environ["DOMAIN"]
+s3_client = boto3.client('s3')
+redirect_bucket = os.environ.get('S3_REDIRECT_BUCKET')
+
+class UrlShortener:
+
+    def __init__(self):
+        """
+        To represent ShortUrl item.
+
+        Attrs:
+        - key_id (partition key)
+        - short_path (sort key)
+        - hits
+        """
+        self.table_name = os.environ["DYNAMO_DB_KEY"]
+        self.region = 'ap-southeast-1'
+        self.dynamodb = boto3.resource(
+            'dynamodb',
+            region_name=self.region,
+        )
+        self.table = self.dynamodb.Table(self.table_name)
+
+    @classmethod
+    def generate_short_path(cls: str):
+        CHARACTERS = string.ascii_letters + string.digits
+        return ''.join((secrets.choice(CHARACTERS) for _ in range(6)))
+
+    def create(
+        self,
+        key_id,
+        short_path,
+        target_url,
+        **kwargs,
+    ):
+        """
+        Inserts a new item into the DynamoDB table.
+
+        :param item: A dictionary representing the item to be inserted.
+                     Example: {'id': '123', 'name': 'John Doe'}
+        :return: Response from the DynamoDB service.
+        :raises: Exception if the operation fails.
+        """
+        item = {
+            'key_id': key_id,
+            'short_path': short_path,
+            'target_url': target_url,
+            **kwargs,
+        }
+        try:
+            response = self.table.put_item(Item=item)
+            return response
+        except (BotoCoreError, ClientError) as e:
+            print(f"Error creating item in DynamoDB: {e}")
+            raise
+
+    def update(self, key):
+        try:
+            response = self.table.update_item(
+                Key=key,
+                UpdateExpression="SET hits = hits + :inc",
+                ExpressionAttributeValues={
+                    ':inc': 1
+                },
+                ConditionExpression="attribute_exists(key_id)",
+                ReturnValues='ALL_NEW',
+            )
+            item = response.get('Attributes')
+            return item
+        except (BotoCoreError, ClientError) as e:
+            print(f"Error retrieving item from DynamoDB: {e}")
+            raise
+
+    def query(self, index_name, key_conditions, **kwargs):
+        response = self.table.query(
+            IndexName=index_name,
+            KeyConditions=key_conditions,
+        )
+        return response['Items']
+
+
+shortener = UrlShortener()
+
+@dataclass
+class RequestData:
+    user_id: str = "<anonymous>"
+    title: str = ""
+    description: str = ""
+    target_url: str = ""
+    segments: list = ()
 
 
 def lambda_handler(event, context):
@@ -29,11 +121,8 @@ def lambda_handler(event, context):
                 return resolve_key(path_params=event['pathParameters'])
             else:
                 return list_keys(query_params=event['queryStringParameters'])
-        case  "POST":
-            body = json.loads(event['body'])
-            user_id = body.get('user_id', '')
-            url = body['target_url']
-            return generate_key(url=url, user_id=user_id)
+        case "POST":
+            return generate_key(body=event['body'])
         case _:
             return create_response(405, {'error': 'Method not allowed'})
 
@@ -51,47 +140,83 @@ def create_response(status_code: int, body: dict[str, Any], encoder_cls=None) ->
         'body': json.dumps(body, cls=encoder_cls)
     }
 
-def generate_key(url, user_id=""):
-    shortened_path = ShortUrl.generate_short_path()
-    key_id = saturate(shortened_path)
+def generate_key(body, *args, **kwargs):
+    body = json.loads(body)
+
+    short_path = shortener.generate_short_path()
+    key_id = saturate(short_path)
+    url = body['target_url']
+    segments = body.get('segments', [])
+    request_data = RequestData(**body)
+    request_data_dict = asdict(request_data)
     key_data = dict(
+        **request_data_dict,
         key_id=key_id,
-        short_path=shortened_path,
-        target_url=url,
-        user_id=user_id or "<anonymous>",
+        short_path=short_path,
         hits=0,
     )
-    short_url = ShortUrl()
-    short_url.create(**key_data)
+
+    shortener.create(**key_data)
+
+    # Create html document
+    keys = segments + [short_path]
+    key = "/".join(keys)
+
+    preview_url = (
+        f"https://{os.environ['S3_PREVIEW_BUCKET']}.s3.{os.environ['S3_REGION']}"
+        f".amazonaws.com/{short_path}.png"
+    )
+    data = {
+        'key': key,
+        'target_url': url,
+        'title': '',
+        'description': '',
+        'preview_url': preview_url,        
+    }
+    create_redirect_page(**data)
+    key_data['short_url'] = f"https://{DOMAIN}/{key}"
     return create_response(200, key_data)
 
-def resolve_key(path_params):
+def create_redirect_page(
+    key,
+    target_url,
+    title,
+    preview_url,
+    description=''
+) -> str:
+
+    """Create HTML redirect page with normalized data."""
+    html_content = TEMPLATE.format(
+        target_url=target_url,
+        title=title,
+        preview_url=preview_url,
+        description=description
+    )
+
+    # Upload HTML content to S3
+    res = s3_client.put_object(
+        Bucket=redirect_bucket,
+        Key=key,
+        Body=html_content,
+        ContentType='text/html',
+    )
+    return res
+
+
+def resolve_key(path_params, *args, **kwargs):
     short_path = path_params['short_path']
     key = saturate(short_path)
-    short_url = ShortUrl()
-    item = short_url.update(
+    item = shortener.update(
         key={
             'key_id': key,
         }
     )
     if item:
-        return {
-                'statusCode': 200,
-                'headers': {
-                    'Access-Control-Allow-Headers': 'Content-Type',
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Methods': 'OPTIONS,POST,GET',
-                },
-                'body': json.dumps({
-                    'target_url': item.get('target_url'),
-                }),
-            }
-    else:
-        return create_response(
-            404,
-            {'error': f"Item with key_id {key} not found"},
-        )
-
+        return create_response(200, item, encoder_cls=DecimalEncoder)
+    return create_response(
+        404,
+        {'error': f"Item with key_id {key} not found"},
+    )
 
 def list_keys(
     query_params,
@@ -105,7 +230,6 @@ def list_keys(
         )
 
     user_id = query_params.get('user_id')
-    short_url = ShortUrl()
 
     index_name = ''
     key_conditions = {}
@@ -119,7 +243,7 @@ def list_keys(
             }
         }
 
-    items = short_url.query(
+    items = shortener.query(
         index_name=index_name,
         key_conditions=key_conditions,
     )
@@ -188,96 +312,6 @@ def true_chr(integer):
         raise ValueError("%d is not a valid integer in the range of base %d" % (integer, BASE))
 
 
-class ShortUrl:
-
-    def __init__(self):
-        """
-        To represent ShortUrl item.
-
-        Attrs:
-        - key_id (partition key)
-        - short_path (sort key)
-        - hits
-        """
-        self.table_name = os.environ["DYNAMO_DB_KEY"]
-        self.region = 'ap-southeast-1'
-        self.dynamodb = boto3.resource('dynamodb', region_name=self.region)
-        self.table = self.dynamodb.Table(self.table_name)
-
-
-    @classmethod
-    def generate_short_path(cls: str):
-        CHARACTERS = string.ascii_letters + string.digits
-        return ''.join((secrets.choice(CHARACTERS) for _ in range(6)))
-
-    def create(
-        self,
-        key_id,
-        short_path,
-        target_url,
-        **kwargs,
-    ):
-        """
-        Inserts a new item into the DynamoDB table.
-
-        :param item: A dictionary representing the item to be inserted.
-                     Example: {'id': '123', 'name': 'John Doe'}
-        :return: Response from the DynamoDB service.
-        :raises: Exception if the operation fails.
-        """
-        item = {
-            'key_id': key_id,
-            'short_path': short_path,
-            'target_url': target_url,
-            **kwargs,
-        }
-        try:
-            response = self.table.put_item(Item=item)
-            return response
-        except (BotoCoreError, ClientError) as e:
-            print(f"Error creating item in DynamoDB: {e}")
-            raise
-
-    def get_batch(self, keys):
-        # Perform the batch get item operation
-        print(keys)
-        response = self.dynamodb.batch_get_item(
-            RequestItems={
-                self.table_name: {
-                    'Keys': keys
-                }
-            }
-        )
-
-        # Extract and return the items from the response
-        items = response.get('Responses', {}).get(self.table_name, [])
-        return items
-
-    def update(self, key):
-        try:
-            response = self.table.update_item(
-                Key=key,
-                UpdateExpression="SET hits = hits + :inc",
-                ExpressionAttributeValues={
-                    ':inc': 1
-                },
-                ConditionExpression="attribute_exists(key_id)",
-                ReturnValues='ALL_NEW',
-            )
-            item = response.get('Attributes')
-            return item
-        except (BotoCoreError, ClientError) as e:
-            print(f"Error retrieving item from DynamoDB: {e}")
-            raise
-
-    def query(self, index_name, key_conditions, **kwargs):
-        response = self.table.query(
-            IndexName=index_name,
-            KeyConditions=key_conditions,
-        )
-        return response['Items']
-
-
 class DecimalEncoder(json.JSONEncoder):
     """Help class to serialize Decimal objects to JSON."""
     def default(self, obj):
@@ -300,15 +334,15 @@ TEMPLATE = """
     <!-- Open Graph Meta Tags -->
     <meta property="og:title" content="{title}">
     <meta property="og:description" content="{description}">
-    <meta property="og:image" content="{image_url}">
-    <meta property="og:url" content="{destination_url}">
-    <meta property="og:site_name" content="{destination_url}">
+    <meta property="og:image" content="{preview_url}">
+    <meta property="og:url" content="{target_url}">
+    <meta property="og:site_name" content="{target_url}">
 
     <!-- Twitter Card Meta Tags -->
     <meta name="twitter:card" content="">
     <meta name="twitter:title" content="{title}">
     <meta name="twitter:description" content="{description}">
-    <meta name="twitter:image" content="{image_url}">
+    <meta name="twitter:image" content="{preview_url}">
     <meta name="twitter:image:alt" content="">
 
     <!-- Apple Mobile Web App Meta Tags -->
@@ -321,14 +355,14 @@ TEMPLATE = """
         window.onload = function() {{
             console.log("Page has loaded. Redirecting...");
             // Redirect to a new URL
-            window.location.href = "{destination_url}";
+            window.location.href = "{target_url}";
         }};
     </script>
 </head>
 <body>
     <!-- Optional: Add fallback content for users with JavaScript disabled -->
     <noscript>
-        <p>If you are not redirected automatically, please <a href="{destination_url}">click here</a>.</p>
+        <p>If you are not redirected automatically, please <a href="{target_url}">click here</a>.</p>
     </noscript>
 </body>
 </html>
