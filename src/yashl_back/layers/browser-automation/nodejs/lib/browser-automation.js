@@ -14,7 +14,6 @@ export class BrowserAutomation {
         defaultViewport: null,
         devtools: false,
       },
-      cookieFilePath: './cookies.json'
     };
 
     this.config = this.mergeConfig(defaultConfig, config);
@@ -71,8 +70,6 @@ export class BrowserAutomation {
       await this.browser.setCookie(...config.cookies);
     }
 
-    await this.loadCookies();
-
     if (config.headers) {
       await this.page.setExtraHTTPHeaders(config.headers);
     }
@@ -81,10 +78,7 @@ export class BrowserAutomation {
 
   async loadCookies() {
     try {
-      console.log('Loading cookies from:', this.config.cookieFilePath);
-      const cookiesData = await fsPromises.readFile(this.config.cookieFilePath, 'utf8');
-      const cookies = JSON.parse(cookiesData);
-      await this.browser.setCookie(...cookies);
+      await this.browser.setCookie(...this.config.cookies);
     } catch (error) {
       console.warn('No cookies found, or failed to load cookies:', error.message);
     }
@@ -100,16 +94,6 @@ export class BrowserAutomation {
     const defaultOptions = {
       waitUntil: 'networkidle2',
       timeout: 30000,
-      authStrategy: 'none',
-      credentials: {
-        username: null,
-        password: null,
-        selectors: {
-          username: 'input[name=email]',
-          password: 'input[name=password]',
-          submit: 'button[type=submit]'
-        }
-      },
       waitForSelector: null,
       beforeScreenshot: null
     };
@@ -121,82 +105,12 @@ export class BrowserAutomation {
       timeout: config.timeout
     });
 
-    await this.handleAuth(config.authStrategy, config.credentials);
-
     if (config.waitForSelector) {
       await this.page.waitForSelector(config.waitForSelector, { timeout: config.timeout });
     }
 
     if (config.beforeScreenshot && typeof config.beforeScreenshot === 'function') {
       await config.beforeScreenshot(this.page);
-    }
-  }
-
-  async handleAuth(strategy, credentials) {
-    switch (strategy) {
-      case 'dismiss':
-        await this.dismissDialogs();
-        break;
-      
-      case 'login':
-        await this.performLogin(credentials);
-        await this.saveCookies(); // Save cookies after login
-        break;
-      
-      case 'auto':
-        await this.dismissDialogs();
-        const needsLogin = await this.checkLoginRequired(credentials.selectors.username);
-        if (needsLogin) {
-          await this.performLogin(credentials);
-          await this.saveCookies(); // Save cookies after login
-        }
-        break;
-
-      case 'none':
-      default:
-        break;
-    }
-  }
-
-  async dismissDialogs() {
-    try {
-      await this.page.keyboard.press('Escape');
-      await this.page.waitForNetworkIdle({concurrency: 2});
-    } catch (error) {
-      console.warn('Failed to dismiss dialogs:', error.message);
-    }
-  }
-
-  async checkLoginRequired(usernameSelector) {
-    try {
-      console.log("Check if there's login form with selector: ", usernameSelector)
-      const loginForm = await this.page.$(usernameSelector);
-      return loginForm !== null;
-    } catch (error) {
-      console.warn('Failed to check login status:', error.message);
-      return false;
-    }
-  }
-
-  async performLogin(credentials) {
-    if (!credentials.username || !credentials.password) {
-      throw new Error('Credentials required for login strategy');
-    }
-
-    try {
-      const { username, password, selectors } = credentials;
-
-      await this.page.waitForSelector(selectors.username);
-      await this.page.type(selectors.username, username);
-      await this.page.type(selectors.password, password);
-
-      await Promise.all([
-        this.page.waitForNavigation({ waitUntil: 'networkidle2' }),
-        this.page.click(selectors.submit)
-      ]);
-
-    } catch (error) {
-      throw new Error(`Login failed: ${error.message}`);
     }
   }
 
@@ -216,22 +130,5 @@ export class BrowserAutomation {
     } catch (error) {
       throw new Error(`Screenshot failed: ${error.message}`);
     }
-  }
-}
-
-
-export class MetaBrowserAutomation extends BrowserAutomation{
-
-  async initialize(options = {}) {
-    const defaultOptions = {
-      viewport: { width: 1200, height: 800, deviceScaleFactor: 1 },
-      mobile: true,
-    };
-    await super.initialize({ ...defaultOptions, ...options });
-  }
-
-  async navigateAndWait(url, options = {}){
-    options.authStrategy = 'dismiss';
-    await super.navigateAndWait(url, options)
   }
 }
