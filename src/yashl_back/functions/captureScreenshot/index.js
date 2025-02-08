@@ -1,6 +1,6 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-// import { MetaBrowserAutomation } from '../../layers/browser-automation/nodejs/lib/browser-automation.js';
-import { MetaBrowserAutomation } from '/opt/nodejs/lib/browser-automation.js';
+import { PutObjectCommand, S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+// import { BrowserAutomation } from '../../layers/browser-automation/nodejs/lib/browser-automation.js';
+import { BrowserAutomation } from '/opt/nodejs/lib/browser-automation.js';
 import fsPromises from "fs/promises";
 
 
@@ -12,6 +12,10 @@ const BROWSER_CONFIG = {
     headless: false,
   },
 };
+
+const region = process.env.S3_REGION;
+
+const s3Client = new S3Client({region: region});
 
 
 async function handleEventBody(event) {
@@ -34,13 +38,23 @@ export const handler = async (event) => {
 
   const shortPath = body.short_path;
   const url = body.target_url;
-
-  console.log('Initializing browser automation');
-  const automation = new MetaBrowserAutomation(BROWSER_CONFIG);
-  await automation.initialize();
-  await automation.navigateAndWait(url);
-  const screenshot = await automation.takeScreenshot();
-  return putToS3(shortPath, screenshot)
+  const cookiesPath = body.cookies_path;
+  let cookies = null;
+  if (cookiesPath) {
+    cookies = await getCookies(cookiesPath);
+  }
+  try {
+    console.log('Initializing browser automation');
+    const automation = new BrowserAutomation(BROWSER_CONFIG);
+    await automation.initialize({
+      cookies: cookies,
+    });``
+    await automation.navigateAndWait(url);
+    const screenshot = await automation.takeScreenshot();
+    return putToS3(shortPath, screenshot);
+  } catch (error) {
+    console.error(error);
+  }
 };
 
 
@@ -59,7 +73,6 @@ const putToS3 = async (key, data, metadata={}) => {
   let statusCode;
   let url;
   const bucket = process.env.S3_PREVIEW_BUCKET;
-  const region = process.env.S3_REGION;
   const debug = process.env.DEBUG === "true"
   const outputType = "png";
 
@@ -67,7 +80,7 @@ const putToS3 = async (key, data, metadata={}) => {
     console.log("writing file locally...");
     await fsPromises.writeFile(
       `./${key}.${outputType}`,
-      screenshot
+      data
     );
     statusCode = 200;
     url = `local://screenshots/${key}.${outputType}`
@@ -75,7 +88,6 @@ const putToS3 = async (key, data, metadata={}) => {
   else {
     console.log("Uploading to S3...");
 
-    const s3Client = new S3Client({region: region});
     const command = new PutObjectCommand({
       Bucket: bucket,
       Key: `${key}.${outputType}`,
@@ -96,3 +108,42 @@ const putToS3 = async (key, data, metadata={}) => {
     }),
   };
 }
+
+const getCookies = async (cookiesPath) => {
+  try {
+      if (!cookiesPath) {
+          throw new Error('Cookies path is required');
+      }
+
+      let content;
+      
+      // Check if path starts with http(s) - simple URL check
+      if (cookiesPath.startsWith('http://') || cookiesPath.startsWith('https://')) {
+          // Simple S3 URL check
+          if (!cookiesPath.includes(`s3.${region}.amazonaws.com`)) {
+              throw new Error('Only S3 URLs are supported');
+          }
+
+          // Handle S3 URL
+          const url = new URL(cookiesPath);
+          const bucketName = url.hostname.split('.')[0];
+          const objectKey = url.pathname.substring(1);
+
+          const response = await s3Client.send(new GetObjectCommand({
+              Bucket: bucketName,
+              Key: objectKey
+          }));
+          content = await response.Body.transformToString();
+      } else {
+          // Handle local file
+          const absolutePath = path.resolve(cookiesPath);
+          content = await fsPromises.readFile(absolutePath, 'utf8');
+      }
+
+      return JSON.parse(content).cookies;
+
+  } catch (error) {
+      console.error('Error in getCookies:', error);
+      throw error;
+  }
+};
