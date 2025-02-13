@@ -146,6 +146,7 @@ def generate_key(body, *args, **kwargs):
     short_path = shortener.generate_short_path()
     key_id = saturate(short_path)
     url = body['target_url']
+    title = body.get('title', '')
     segments = body.get('segments', [])
     request_data = RequestData(**body)
     request_data_dict = asdict(request_data)
@@ -169,7 +170,7 @@ def generate_key(body, *args, **kwargs):
     data = {
         'key': key,
         'target_url': url,
-        'title': '',
+        'title': title,
         'description': '',
         'preview_url': preview_url,        
     }
