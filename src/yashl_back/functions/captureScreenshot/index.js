@@ -39,6 +39,7 @@ export const handler = async (event) => {
   const shortPath = body.short_path;
   const url = body.target_url;
   const cookiesPath = body.cookies_path;
+  const userAgent = body.user_agent || {};
   let cookies = null;
   if (cookiesPath) {
     cookies = await getCookies(cookiesPath);
@@ -48,9 +49,9 @@ export const handler = async (event) => {
     const automation = new BrowserAutomation(BROWSER_CONFIG);
     await automation.initialize({
       cookies: cookies,
+      userAgent: userAgent,
     });
-    await automation.navigateAndWait(url);
-    const screenshot = await automation.takeScreenshot();
+    const screenshot = await automation.takeScreenshot(url);
     return putToS3(shortPath, screenshot);
   } catch (error) {
     console.error(error);
