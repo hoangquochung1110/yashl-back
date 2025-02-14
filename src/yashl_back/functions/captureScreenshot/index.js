@@ -48,7 +48,7 @@ export const handler = async (event) => {
     const automation = new BrowserAutomation(BROWSER_CONFIG);
     await automation.initialize({
       cookies: cookies,
-    });``
+    });
     await automation.navigateAndWait(url);
     const screenshot = await automation.takeScreenshot();
     return putToS3(shortPath, screenshot);
