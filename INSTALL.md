@@ -28,12 +28,14 @@ zip -r ../browser-automation-layer.zip nodejs/
 
 2. Publish the layer using AWS CLI:
 ```
-aws lambda publish-layer-version \
+LAYER_VERSION_ARN=$(aws lambda publish-layer-version \
     --layer-name browser-automation \
     --description "Browser automation utilities" \
     --zip-file fileb://../browser-automation-layer.zip \
     --compatible-runtimes nodejs18.x \
-    --compatible-architectures x86_64 arm64
+    --compatible-architectures x86_64 arm64 \
+    --query 'LayerVersionArn' \
+    --output text)
 ```
 
 3. The command above will return a response with the layer ARN. Save the ARN from the response, it will look something like:
@@ -44,6 +46,6 @@ arn:aws:lambda:<region>:<account-id>:layer:browser-automation:1
 4. Attach the layer to your trelloScreenshot function:
 ```
 aws lambda update-function-configuration \
-    --function-name trelloScreenshot \
-    --layers arn:aws:lambda:<region>:<account-id>:layer:browser-automation:1
+    --function-name captureScreenshot \
+    --layers ${LAYER_VERSION_ARN}
 ```
