@@ -54,3 +54,23 @@ aws lambda update-function-configuration \
     --function-name trelloScreenshot \
     --layers arn:aws:lambda:<region>:<account-id>:layer:browser-automation:1
 ```
+
+# Lambda Function Usage Notice
+
+## Important: Use Lambda Aliases
+
+The base Lambda function `arn:aws:lambda:ap-southeast-1:838835070561:function:key` should not be invoked directly.
+
+Instead, please use the appropriate aliases:
+- Development: `arn:aws:lambda:ap-southeast-1:838835070561:function:key:dev`
+- Production: `arn:aws:lambda:ap-southeast-1:838835070561:function:key:prod`
+
+## Benefits of Using Aliases
+- Proper version control
+- Staged deployments
+- Environment-specific configurations
+- Improved security
+- Better monitoring and metrics separation
+
+## Resource Policy
+The base Lambda function has permissions configured to work with API Gateway, but direct invocation should be done through the aliases to ensure proper environment separation.
